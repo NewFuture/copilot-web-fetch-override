@@ -1,16 +1,19 @@
-# Copilot Proxy WebFetch
+# Copilot WebFetch Override
 
-A user-scoped GitHub Copilot extension that provides `proxy_web_fetch` as a fallback when the built-in `web_fetch` rejects a URL because DNS returned a blocked or Fake-IP address.
+A user-scoped GitHub Copilot extension that replaces the built-in `web_fetch` tool so Fake-IP, loopback, private, and link-local targets are not rejected by its SSRF address check.
 
 ## Behavior
 
-- Keeps the built-in `web_fetch` as the preferred tool.
-- Detects address-validation failures through `onPostToolUseFailure`.
-- Tells Copilot to retry the same request with `proxy_web_fetch`.
-- Supports `url`, `raw`, `start_index`, and `max_length` like `web_fetch`.
+- Registers `web_fetch` with `overridesBuiltInTool: true`.
+- Handles every `web_fetch` request directly; the original handler is not invoked.
+- Supports the original `url`, `raw`, `start_index`, and `max_length` interface.
 - Converts HTML to simplified Markdown without third-party dependencies.
 - Follows HTTP redirects and limits requests to 30 seconds, 5 MiB, and 10 redirects.
 - Does not filter target hostnames or IP addresses.
+
+## Implementation
+
+The extension reuses the public `@github/copilot-sdk` extension API and Node.js built-ins such as `fetch`, `URL`, `TextDecoder`, and `Buffer`. Copilot's original WebFetch handler and bundled HTML-processing modules are not exported to extension child processes, so the HTML-to-Markdown conversion remains a small local implementation.
 
 ## Install
 
@@ -39,6 +42,6 @@ git -C "$env:USERPROFILE\.copilot\extensions\proxy-web-fetch" pull --ff-only
 
 ## Security
 
-`proxy_web_fetch` intentionally does not apply the built-in SSRF target-address restrictions. It can access loopback, LAN, link-local, Fake-IP, and cloud metadata endpoints. Only install and use it in an environment where that behavior is acceptable.
+This override intentionally removes the built-in SSRF target-address restrictions. `web_fetch` can access loopback, LAN, link-local, Fake-IP, and cloud metadata endpoints. Only install and use it in an environment where that behavior is acceptable.
 
 Network routing, DNS, and proxy configuration remain the responsibility of the host system.
