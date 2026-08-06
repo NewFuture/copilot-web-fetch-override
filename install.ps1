@@ -1,61 +1,84 @@
 [CmdletBinding()]
 param(
+    [ValidatePattern("^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")]
     [string]$Version = "",
     [string]$Destination = (Join-Path $HOME ".copilot\extensions\proxy-web-fetch")
 )
 
 $ErrorActionPreference = "Stop"
+$ProgressPreference = "SilentlyContinue"
 $repository = "NewFuture/copilot-proxy-web-fetch"
-$archivePattern = "copilot-proxy-web-fetch-*.zip"
 $installFiles = @(
     "extension.mjs",
     "README.md",
+    "LICENSE",
+    "SECURITY.md",
     "THIRD_PARTY_NOTICES.md"
 )
-$requiredFiles = $installFiles + "VERSION"
-
-$gh = Get-Command gh -CommandType Application -ErrorAction SilentlyContinue
-if (-not $gh) {
-    throw "GitHub CLI is required. Install it from https://cli.github.com/ and run 'gh auth login'."
+$requiredFiles = $installFiles + @("install.ps1", "VERSION")
+$headers = @{
+    Accept = "application/vnd.github+json"
+    "User-Agent" = "copilot-proxy-web-fetch-installer"
+    "X-GitHub-Api-Version" = "2022-11-28"
 }
 
-& $gh.Source auth status --hostname github.com *> $null
-if ($LASTEXITCODE -ne 0) {
-    throw "GitHub CLI is not authenticated. Run 'gh auth login' with an account that can access $repository."
+[Net.ServicePointManager]::SecurityProtocol = (
+    [Net.ServicePointManager]::SecurityProtocol -bor
+    [Net.SecurityProtocolType]::Tls12
+)
+
+if ($Version -and -not $Version.StartsWith("v")) {
+    $Version = "v$Version"
 }
+
+$releaseApiUrl = if ($Version) {
+    "https://api.github.com/repos/$repository/releases/tags/$Version"
+} else {
+    "https://api.github.com/repos/$repository/releases/latest"
+}
+
+try {
+    $release = Invoke-RestMethod -Uri $releaseApiUrl -Headers $headers
+} catch {
+    throw "Could not read the public GitHub Release metadata: $($_.Exception.Message)"
+}
+
+$tagName = [string]$release.tag_name
+if ($tagName -notmatch "^v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$") {
+    throw "Release metadata contains an invalid tag: $tagName"
+}
+$archiveName = "copilot-proxy-web-fetch-$tagName.zip"
+$archiveAssets = @($release.assets | Where-Object { $_.name -eq $archiveName })
+if ($archiveAssets.Count -ne 1) {
+    throw "Release $tagName must contain exactly one $archiveName asset."
+}
+
+$archiveAsset = $archiveAssets[0]
+$digest = [string]$archiveAsset.digest
+if ($digest -notmatch "^sha256:([0-9a-fA-F]{64})$") {
+    throw "GitHub did not provide a valid SHA-256 digest for $archiveName."
+}
+$expectedHash = $Matches[1].ToLowerInvariant()
 
 $temporaryRoot = Join-Path ([IO.Path]::GetTempPath()) (
     "copilot-proxy-web-fetch-" + [Guid]::NewGuid().ToString("N")
 )
-$downloadDirectory = Join-Path $temporaryRoot "download"
+$archivePath = Join-Path $temporaryRoot $archiveName
 $extractDirectory = Join-Path $temporaryRoot "extract"
 
 try {
-    New-Item -ItemType Directory -Path $downloadDirectory -Force | Out-Null
+    New-Item -ItemType Directory -Path $temporaryRoot -Force | Out-Null
+    Invoke-WebRequest -Uri $archiveAsset.browser_download_url `
+        -OutFile $archivePath -UseBasicParsing
 
-    $downloadArguments = @("release", "download")
-    if ($Version) {
-        $downloadArguments += $Version
-    }
-    $downloadArguments += @(
-        "--repo", $repository,
-        "--pattern", $archivePattern,
-        "--dir", $downloadDirectory
-    )
-
-    & $gh.Source @downloadArguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "Could not download the requested release from $repository."
+    $actualHash = (
+        Get-FileHash -LiteralPath $archivePath -Algorithm SHA256
+    ).Hash.ToLowerInvariant()
+    if ($actualHash -ne $expectedHash) {
+        throw "Release archive SHA-256 mismatch. Expected $expectedHash, got $actualHash."
     }
 
-    $archives = @(
-        Get-ChildItem -LiteralPath $downloadDirectory -File -Filter $archivePattern
-    )
-    if ($archives.Count -ne 1) {
-        throw "Expected exactly one release archive, but found $($archives.Count)."
-    }
-
-    Expand-Archive -LiteralPath $archives[0].FullName -DestinationPath $extractDirectory
+    Expand-Archive -LiteralPath $archivePath -DestinationPath $extractDirectory
     $payloadDirectory = Join-Path $extractDirectory "proxy-web-fetch"
 
     foreach ($file in $requiredFiles) {
@@ -70,10 +93,8 @@ try {
             -Destination (Join-Path $Destination $file) -Force
     }
 
-    $installedVersion = Get-Content -LiteralPath (
-        Join-Path $payloadDirectory "VERSION"
-    ) -Raw
-    Write-Host "Installed proxy-web-fetch $($installedVersion.Trim()) to $Destination"
+    Write-Host "Installed proxy-web-fetch $tagName to $Destination"
+    Write-Host "Verified release SHA-256: $actualHash"
     Write-Host "Run /clear or restart Copilot to reload the extension."
 } finally {
     if (Test-Path -LiteralPath $temporaryRoot) {

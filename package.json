@@ -1,7 +1,17 @@
 {
   "name": "copilot-proxy-web-fetch",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "private": true,
+  "description": "A GitHub Copilot web_fetch override without target-address filtering",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NewFuture/copilot-proxy-web-fetch.git"
+  },
+  "homepage": "https://github.com/NewFuture/copilot-proxy-web-fetch#readme",
+  "bugs": {
+    "url": "https://github.com/NewFuture/copilot-proxy-web-fetch/issues"
+  },
   "type": "module",
   "engines": {
     "node": ">=20"

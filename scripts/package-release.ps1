@@ -19,6 +19,8 @@ if ($package.version -ne $packageVersion) {
 $releaseFiles = @(
     "extension.mjs",
     "README.md",
+    "LICENSE",
+    "SECURITY.md",
     "THIRD_PARTY_NOTICES.md",
     "install.ps1"
 )
@@ -30,6 +32,7 @@ foreach ($file in $releaseFiles) {
 
 $distDirectory = Join-Path $repositoryRoot "dist"
 $archivePath = Join-Path $distDirectory "copilot-proxy-web-fetch-$Version.zip"
+$checksumPath = "$archivePath.sha256"
 $temporaryRoot = Join-Path ([IO.Path]::GetTempPath()) (
     "copilot-proxy-web-fetch-package-" + [Guid]::NewGuid().ToString("N")
 )
@@ -50,7 +53,11 @@ try {
         Remove-Item -LiteralPath $archivePath -Force
     }
     Compress-Archive -LiteralPath $payloadDirectory -DestinationPath $archivePath
+    $hash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    Set-Content -LiteralPath $checksumPath `
+        -Value "$hash  $(Split-Path -Leaf $archivePath)" -Encoding ascii
     Write-Output $archivePath
+    Write-Output $checksumPath
 } finally {
     if (Test-Path -LiteralPath $temporaryRoot) {
         Remove-Item -LiteralPath $temporaryRoot -Recurse -Force

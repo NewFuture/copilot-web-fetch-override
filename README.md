@@ -5,6 +5,12 @@ tool without its SSRF target-address filter. It works with DNS Fake-IP ranges
 such as `198.18.0.0/15` and also permits loopback, private, link-local, and cloud
 metadata addresses.
 
+> [!WARNING]
+> This extension gives model-initiated requests access to local and private
+> services without per-request permission prompts. Fetched pages can also
+> contain prompt injection. Review the [security model](SECURITY.md) before
+> installing.
+
 ## Compatibility
 
 The extension registers `web_fetch` with `overridesBuiltInTool: true` and keeps
@@ -34,33 +40,38 @@ not guaranteed to be byte-for-byte identical for every page.
 ## Install
 
 Copilot does not currently provide a Marketplace, deep link, or native
-one-click installer for this kind of CLI extension. It discovers
-`extension.mjs` from its user extensions directory. This repository provides a
-one-command Release installer as the closest equivalent.
+installer for this kind of CLI extension. It discovers `extension.mjs` from its
+user extensions directory. This repository provides a one-command public
+Release installer as the closest equivalent.
 
-Because the repository is private, first authenticate GitHub CLI with an
-account that has access:
-
-```powershell
-gh auth login
-```
-
-Install or update to the latest release:
+Install or update to the latest release without GitHub CLI or authentication:
 
 ```powershell
-& ([scriptblock]::Create((gh api repos/NewFuture/copilot-proxy-web-fetch/contents/install.ps1 -H "Accept: application/vnd.github.raw+json" | Out-String)))
+& ([scriptblock]::Create((irm https://github.com/NewFuture/copilot-proxy-web-fetch/releases/latest/download/install.ps1)))
 ```
 
-The installer downloads the signed-in account's latest accessible GitHub
-Release, validates its expected files, and installs it to:
+The installer:
 
-```powershell
-$HOME\.copilot\extensions\proxy-web-fetch
-```
+- reads public release metadata from the GitHub API;
+- downloads the versioned ZIP;
+- verifies the SHA-256 digest supplied by GitHub;
+- checks the required files; and
+- installs to `$HOME\.copilot\extensions\proxy-web-fetch`.
 
 Restart Copilot or run `/clear` to reload extensions. Re-running the command
-updates the installed bundle. The committed and released `extension.mjs` is
-self-contained, so the installed extension does not require Node.js or npm.
+updates the installed bundle. To inspect the script before executing it:
+
+```powershell
+irm https://github.com/NewFuture/copilot-proxy-web-fetch/releases/latest/download/install.ps1 -OutFile install.ps1
+Get-Content .\install.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+To install a fixed release, download that release's `install.ps1` and pass the
+same tag through `-Version`, for example `-Version v2.1.0`.
+
+The released `extension.mjs` is self-contained, so the installed extension does
+not require Node.js or npm.
 
 ## Develop
 
@@ -89,8 +100,13 @@ git tag -a $version -m $version
 git push origin $version
 ```
 
-Each GitHub Release contains the single-file bundle, installer, third-party
-notices, and a versioned ZIP suitable for manual extraction.
+Each GitHub Release contains the bundle, installer, license, security policy,
+third-party notices, versioned ZIP, and its SHA-256 checksum.
+
+## License
+
+This project is available under the [MIT License](LICENSE). Bundled dependency
+licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Security
 
@@ -99,5 +115,6 @@ restrictions and skips per-request permission prompts. `web_fetch` can access
 loopback, LAN, link-local, Fake-IP, and cloud metadata endpoints. Only install
 it where that behavior is explicitly acceptable.
 
-Network routing, DNS, proxy policy, and response trust remain the responsibility
-of the host environment.
+Network routing, DNS, proxy policy, response trust, and model tool access remain
+the responsibility of the host environment. See [SECURITY.md](SECURITY.md) for
+the complete security model and private reporting instructions.
