@@ -1,0 +1,21 @@
+{
+  "name": "copilot-proxy-web-fetch",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "esbuild src/extension.mjs --bundle --platform=node --format=esm --target=node20 --external:@github/copilot-sdk/extension --outfile=extension.mjs --legal-comments=eof",
+    "test": "node --test test/web-fetch.test.mjs",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "verify": "npm test && npm run build && npm run check:bundle"
+  },
+  "dependencies": {
+    "node-html-markdown": "2.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1"
+  }
+}
