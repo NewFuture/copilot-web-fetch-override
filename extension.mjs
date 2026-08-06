@@ -412,7 +412,7 @@ var require_Readability = __commonJS({
         this._forEachNode(links, function(link) {
           var href = link.getAttribute("href");
           if (href) {
-            if (href.indexOf("javascript:") === 0) {
+            if (/^(?:javascript|data|vbscript):/i.test(href.trimStart())) {
               if (link.childNodes.length === 1 && link.childNodes[0].nodeType === this.TEXT_NODE) {
                 var text = this._doc.createTextNode(link.textContent);
                 link.parentNode.replaceChild(text, link);

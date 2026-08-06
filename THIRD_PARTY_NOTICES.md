@@ -36,6 +36,8 @@ The build applies two narrow, fail-closed patches in
 - `node-html-markdown` escapes every pipe in a Markdown table cell instead of
   only the first pipe. Backslashes have already been escaped by its text visitor
   before table post-processing.
+- `@mozilla/readability` removes `javascript:`, `data:`, and `vbscript:` links
+  before converting untrusted page content to Markdown.
 
 The script verifies the exact upstream source before changing it and fails the
 build when the expected version no longer matches.

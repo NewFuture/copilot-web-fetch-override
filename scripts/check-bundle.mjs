@@ -44,5 +44,15 @@ assert.equal(
     true,
     "The bundle must escape every pipe in table cells.",
 );
+assert.equal(
+    source.includes('href.indexOf("javascript:") === 0'),
+    false,
+    "The bundle must not retain Readability's incomplete URL scheme check.",
+);
+assert.equal(
+    source.includes("(?:javascript|data|vbscript):"),
+    true,
+    "The bundle must reject executable link schemes before Markdown conversion.",
+);
 
 console.log("Bundle is self-contained except for the Copilot extension SDK.");

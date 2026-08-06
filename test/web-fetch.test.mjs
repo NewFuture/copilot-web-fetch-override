@@ -150,13 +150,18 @@ test("uses Readability for article pages and removes surrounding navigation", ()
         "<!doctype html><html><head><title>Focused Article</title></head><body>" +
         "<nav>Navigation noise that should be removed</nav>" +
         `<article><h1>Focused Article</h1><p>${paragraph.repeat(8)}</p>` +
-        `<p>${paragraph.repeat(8)}</p></article>` +
+        `<p>${paragraph.repeat(8)}</p>` +
+        '<p><a href="javascript:alert(1)">Script link</a> ' +
+        '<a href="DaTa:text/html,unsafe">Data link</a> ' +
+        '<a href=" vbscript:unsafe">VBScript link</a></p></article>' +
         "<footer>Footer noise that should be removed</footer></body></html>";
 
     const markdown = htmlToMarkdown(html);
     assert.match(markdown, /^# Focused Article/);
     assert.match(markdown, /substantive prose/);
+    assert.match(markdown, /Script link.*Data link.*VBScript link/s);
     assert.doesNotMatch(markdown, /Navigation noise|Footer noise/);
+    assert.doesNotMatch(markdown, /javascript:|data:|vbscript:/i);
 });
 
 test("decodes BOM, HTTP charset, and HTML metadata encodings", () => {
