@@ -1,3 +1,5 @@
+import { Readability } from "@mozilla/readability";
+import { DOMParser } from "linkedom/worker";
 import { NodeHtmlMarkdown } from "node-html-markdown";
 
 export const WEB_FETCH_LIMITS = Object.freeze({
@@ -16,6 +18,9 @@ export class WebFetchError extends Error {
 }
 
 const markdownConverter = new NodeHtmlMarkdown();
+const READABILITY_MAX_ELEMENTS = 100_000;
+const READABILITY_MIN_TEXT_LENGTH = 500;
+const ENCODING_SNIFF_BYTES = 2_048;
 
 function integerArgument(value, fallback, minimum, maximum, name) {
     if (value === undefined) {
@@ -214,14 +219,87 @@ export async function requestUrl(initial, raw, options = {}) {
     throw new WebFetchError("Error: Request did not produce a response.");
 }
 
-export function decodeBody(body, contentType) {
-    const charset =
-        /charset\s*=\s*["']?([^;"'\s]+)/i.exec(contentType)?.[1] ?? "utf-8";
-    try {
-        return new TextDecoder(charset).decode(body);
-    } catch {
-        return new TextDecoder("utf-8").decode(body);
+function charsetValue(value) {
+    const match =
+        /charset\s*=\s*(?:"([^"]+)"|'([^']+)'|([^;\s"'/>]+))/i.exec(value);
+    return (match?.[1] ?? match?.[2] ?? match?.[3] ?? "").trim();
+}
+
+function bomEncoding(body) {
+    if (
+        body.length >= 3 &&
+        body[0] === 0xef &&
+        body[1] === 0xbb &&
+        body[2] === 0xbf
+    ) {
+        return "utf-8";
     }
+    if (body.length >= 2 && body[0] === 0xff && body[1] === 0xfe) {
+        return "utf-16le";
+    }
+    if (body.length >= 2 && body[0] === 0xfe && body[1] === 0xff) {
+        return "utf-16be";
+    }
+    return "";
+}
+
+function markupEncoding(body, contentType) {
+    const type = mediaType(contentType);
+    const isDeclaredMarkup =
+        ["text/html", "application/xhtml+xml", "text/xml", "application/xml"].includes(
+            type,
+        ) ||
+        type.endsWith("+xml");
+    if (type !== "" && !isDeclaredMarkup) {
+        return "";
+    }
+
+    let head = "";
+    for (const byte of body.subarray(0, ENCODING_SNIFF_BYTES)) {
+        head += String.fromCharCode(byte);
+    }
+
+    if (
+        type === "" &&
+        !/^\s*(?:<!doctype\s+html|<html\b|<\?xml\b)/i.test(head)
+    ) {
+        return "";
+    }
+
+    const xmlDeclaration = /<\?xml\b[^>]*\bencoding\s*=\s*["']([^"']+)["']/i.exec(
+        head,
+    );
+    if (xmlDeclaration) {
+        return xmlDeclaration[1].trim();
+    }
+
+    for (const metaTag of head.match(/<meta\b[^>]*>/gi) ?? []) {
+        const charset = charsetValue(metaTag);
+        if (charset) {
+            return charset;
+        }
+    }
+    return "";
+}
+
+export function decodeBody(body, contentType) {
+    const encodings = [
+        bomEncoding(body),
+        charsetValue(contentType),
+        markupEncoding(body, contentType),
+        "utf-8",
+    ];
+    for (const encoding of encodings) {
+        if (!encoding) {
+            continue;
+        }
+        try {
+            return new TextDecoder(encoding).decode(body);
+        } catch {
+            // Try the next declared or inferred encoding.
+        }
+    }
+    return new TextDecoder().decode(body);
 }
 
 function normalizedText(value) {
@@ -243,18 +321,55 @@ function documentTitle(html) {
         .trim();
 }
 
-export function htmlToMarkdown(html) {
-    const title = documentTitle(html);
-    const markdown = markdownConverter.translate(html).trim();
+function markdownWithTitle(title, markdown, heading = false) {
     if (!title) {
         return markdown;
     }
 
-    const firstLine = markdown.split(/\r?\n/).find((line) => line.trim() !== "") ?? "";
+    const firstLine = markdown.split(/\r?\n/, 1)[0];
     if (normalizedText(firstLine) === normalizedText(title)) {
+        if (heading && !/^#\s+/.test(firstLine)) {
+            return `# ${firstLine.replace(/^#{1,6}\s+/, "")}${markdown.slice(firstLine.length)}`;
+        }
         return markdown;
     }
-    return markdown ? `${title}\n\n${markdown}` : title;
+    const formattedTitle = heading ? `# ${title}` : title;
+    return markdown ? `${formattedTitle}\n\n${markdown}` : formattedTitle;
+}
+
+function readableMarkdown(html) {
+    const document = new DOMParser().parseFromString(html, "text/html");
+    const article = new Readability(document, {
+        maxElemsToParse: READABILITY_MAX_ELEMENTS,
+    }).parse();
+    const textContent = article?.textContent?.trim() ?? "";
+    if (
+        !article?.content ||
+        textContent.length < READABILITY_MIN_TEXT_LENGTH
+    ) {
+        return "";
+    }
+    const markdown = markdownConverter.translate(article.content).trim();
+    if (!markdown) {
+        return "";
+    }
+    const title = article.title?.replace(/\s+/g, " ").trim() || documentTitle(html);
+    return markdownWithTitle(title, markdown, true);
+}
+
+export function htmlToMarkdown(html) {
+    try {
+        const readable = readableMarkdown(html);
+        if (readable) {
+            return readable;
+        }
+    } catch {
+        // Readability is best effort; preserve the full-document conversion fallback.
+    }
+
+    const title = documentTitle(html);
+    const markdown = markdownConverter.translate(html).trim();
+    return markdownWithTitle(title, markdown);
 }
 
 function mediaType(contentType) {

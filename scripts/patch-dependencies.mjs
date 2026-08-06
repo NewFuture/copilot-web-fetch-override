@@ -12,6 +12,11 @@ const patches = [
         before: String.raw`.replace('|', '\\|')`,
         after: String.raw`.split('|').join('\\|')`,
     },
+    {
+        path: "node_modules/@mozilla/readability/Readability.js",
+        before: String.raw`if (href.indexOf("javascript:") === 0) {`,
+        after: String.raw`if (/^(?:javascript|data|vbscript):/i.test(href.trimStart())) {`,
+    },
 ];
 
 for (const patch of patches) {
