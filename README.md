@@ -54,18 +54,16 @@ not guaranteed to be byte-for-byte identical for every page.
 
 ### Copilot plugin
 
-Register this repository as a plugin marketplace, then install the plugin:
+Install the plugin directly from this GitHub repository:
 
 ```powershell
-copilot plugin marketplace add NewFuture/copilot-web-fetch-override
-copilot plugin install copilot-web-fetch-override@copilot-web-fetch-override
+copilot plugin install NewFuture/copilot-web-fetch-override
 ```
 
-Or run the equivalent commands inside an interactive Copilot session:
+Or run the equivalent command inside an interactive Copilot session:
 
 ```text
-/plugin marketplace add NewFuture/copilot-web-fetch-override
-/plugin install copilot-web-fetch-override@copilot-web-fetch-override
+/plugin install NewFuture/copilot-web-fetch-override
 ```
 
 Start a new Copilot session after installation. Manage the installed plugin
