@@ -85,9 +85,9 @@ npm ci
 npm run verify
 ```
 
-`npm run verify` runs the local HTTP compatibility tests, creates the bundled
-root `extension.mjs`, checks its syntax, and confirms that its only external
-runtime import is `@github/copilot-sdk/extension`.
+`npm run verify` runs the local HTTP compatibility tests, creates the minified
+and bundled root `extension.mjs`, checks its syntax, and confirms that its only
+external runtime import is `@github/copilot-sdk/extension`.
 
 Source lives in `src/`, compatibility tests in `test/`, and the generated
 single-file extension at the repository root. `node_modules` is not committed.

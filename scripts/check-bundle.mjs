@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
+import { build } from "esbuild";
 
 const syntaxCheck = spawnSync(process.execPath, ["--check", "extension.mjs"], {
     encoding: "utf8",
@@ -12,22 +13,25 @@ assert.equal(
 );
 
 const source = await readFile("extension.mjs", "utf8");
-const externalImports = [
-    ...source.matchAll(
-        /^\s*import\s+(?:[^"'`;\r\n]*?\s+from\s+)?["']([^"']+)["'];?\s*$/gm,
-    ),
-    ...source.matchAll(
-        /^\s*export\s+(?:\*|\{[^}\r\n]*\})\s+from\s+["']([^"']+)["'];?\s*$/gm,
-    ),
-    ...source.matchAll(/\bimport\s*\(\s*["']([^"']+)["']\s*\)/g),
-].map((match) => match[1]);
+const importAnalysis = await build({
+    entryPoints: ["extension.mjs"],
+    bundle: false,
+    write: false,
+    metafile: true,
+    platform: "node",
+    format: "esm",
+    logLevel: "silent",
+});
+const externalImports = Object.values(importAnalysis.metafile.outputs).flatMap(
+    (output) => output.imports.map((entry) => entry.path),
+);
 
 assert.deepEqual(
     [...new Set(externalImports)],
     ["@github/copilot-sdk/extension"],
     "The bundle must only import the Copilot extension SDK at runtime.",
 );
-assert.match(source, /overridesBuiltInTool:\s*true/);
+assert.match(source, /overridesBuiltInTool:\s*(?:true|!0)/);
 assert.match(source, /name:\s*"web_fetch"/);
 assert.equal(
     source.includes("((?:\\s+[^>]*?"),
