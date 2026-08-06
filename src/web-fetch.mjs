@@ -527,7 +527,9 @@ async function writeTemporaryBinary(body, options) {
     const path = join(directory, `${randomUUID()}.bin`);
 
     try {
-        await chmod(directory, 0o700);
+        if (process.platform !== "win32") {
+            await chmod(directory, 0o700);
+        }
         const handle = await open(path, "wx", 0o600);
         try {
             await handle.writeFile(body);
@@ -554,11 +556,10 @@ async function writeTemporaryBinary(body, options) {
 async function formatBinaryResult(result, maxLength, options) {
     const type = mediaType(result.contentType) || "application/octet-stream";
     const byteCount = result.body.byteLength;
-    if (type.startsWith("image/")) {
+    const base64Length = 4 * Math.ceil(byteCount / 3);
+    if (type.startsWith("image/") && base64Length <= maxLength) {
         const base64 = Buffer.from(result.body).toString("base64");
-        if (base64.length <= maxLength) {
-            return `Content type: ${type}\nByte count: ${byteCount}\nBase64:\n${base64}`;
-        }
+        return `Content type: ${type}\nByte count: ${byteCount}\nBase64:\n${base64}`;
     }
 
     const path = await writeTemporaryBinary(result.body, options);
