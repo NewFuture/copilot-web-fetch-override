@@ -133,6 +133,14 @@ test("adds a distinct document title and preserves relative links", () => {
     assert.doesNotMatch(markdown, /\.x\{\}|bad/);
 });
 
+test("handles quoted angle brackets and escapes every table-cell pipe", () => {
+    const markdown = htmlToMarkdown(
+        '<p title="1 > 0">safe</p><table><tr><th>Value</th></tr><tr><td>a|b|c</td></tr></table>',
+    );
+    assert.match(markdown, /^safe/);
+    assert.match(markdown, /a\\\|b\\\|c/);
+});
+
 test("matches normal and raw request headers", async () => {
     const normal = await webFetch({ url: `${primaryUrl}/inspect` });
     assert.match(normal, /accept=text\/markdown, text\/html, \*\/\*/);

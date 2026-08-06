@@ -25,5 +25,20 @@ assert.deepEqual(
 );
 assert.match(source, /overridesBuiltInTool:\s*true/);
 assert.match(source, /name:\s*"web_fetch"/);
+assert.equal(
+    source.includes("((?:\\s+[^>]*?"),
+    false,
+    "The bundled HTML parser must not contain the vulnerable attribute pattern.",
+);
+assert.equal(
+    source.includes('.replace("|", "\\\\|")'),
+    false,
+    "The bundle must not retain the first-pipe-only table escaping.",
+);
+assert.equal(
+    source.includes('.replace(/\\|/g, "\\\\|")'),
+    true,
+    "The bundle must escape every pipe in table cells.",
+);
 
 console.log("Bundle is self-contained except for the Copilot extension SDK.");

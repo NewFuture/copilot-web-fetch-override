@@ -1,6 +1,6 @@
 {
   "name": "copilot-proxy-web-fetch",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "private": true,
   "description": "A GitHub Copilot web_fetch override without target-address filtering",
   "license": "MIT",
@@ -17,7 +17,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "esbuild src/extension.mjs --bundle --platform=node --format=esm --target=node20 --external:@github/copilot-sdk/extension --outfile=extension.mjs --legal-comments=eof",
+    "postinstall": "node scripts/patch-dependencies.mjs",
+    "build": "node scripts/patch-dependencies.mjs && esbuild src/extension.mjs --bundle --platform=node --format=esm --target=node20 --external:@github/copilot-sdk/extension --outfile=extension.mjs --legal-comments=eof",
     "test": "node --test test/web-fetch.test.mjs",
     "check:bundle": "node scripts/check-bundle.mjs",
     "verify": "npm test && npm run build && npm run check:bundle"

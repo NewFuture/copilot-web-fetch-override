@@ -20,6 +20,19 @@ The bundled `extension.mjs` includes the following packages:
 The build uses esbuild 0.28.1 under the MIT License, Copyright 2020 Evan
 Wallace. esbuild itself is not included in the runtime bundle.
 
+## Bundled patches
+
+The build applies two narrow, fail-closed patches in
+`scripts/patch-dependencies.mjs` before bundling:
+
+- `node-html-parser` uses an unambiguous attribute-matching expression to avoid
+  exponential regular-expression backtracking on untrusted HTML.
+- `node-html-markdown` escapes every pipe in a Markdown table cell instead of
+  only the first pipe.
+
+The script verifies the exact upstream source before changing it and fails the
+build when the expected version no longer matches.
+
 ## MIT License
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of

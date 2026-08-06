@@ -68,7 +68,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
 To install a fixed release, download that release's `install.ps1` and pass the
-same tag through `-Version`, for example `-Version v2.1.0`.
+same tag through `-Version`, for example `-Version v2.1.1`.
 
 The released `extension.mjs` is self-contained, so the installed extension does
 not require Node.js or npm.

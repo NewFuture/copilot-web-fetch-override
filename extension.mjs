@@ -5876,7 +5876,7 @@ var require_html = __commonJS({
       })(node_1.default)
     );
     exports.default = HTMLElement;
-    var kMarkupPattern = /<!--[\s\S]*?-->|<(\/?)([a-zA-Z][-.:0-9_a-zA-Z]*)((?:\s+[^>]*?(?:(?:'[^']*')|(?:"[^"]*"))?)*)\s*(\/?)>/g;
+    var kMarkupPattern = /<!--[\s\S]*?-->|<(\/?)([a-zA-Z][-.:0-9_a-zA-Z]*)((?:[^>"'/]|"[^"]*"|'[^']*'|\/(?!\s*>))*)\s*(\/?)>/g;
     var kAttributePattern = /(?:^|\s)(id|class)\s*=\s*((?:'[^']*')|(?:"[^"]*")|\S+)/gi;
     var kElementsClosedByOpening = {
       li: { li: true, LI: true },
@@ -6662,7 +6662,7 @@ ${indent.repeat(indentationLevel)}`).replace(/(\S+?)[^\S\r\n]+$/gm, "$1  ")
         childTranslators: visitor.instance.tableCellTranslators,
         prefix: " ",
         postfix: " |",
-        postprocess: ({ content }) => (0, utilities_1.trimNewLines)(content).replace("|", "\\|").replace(/(?:\r?\n)+/g, " ").trim()
+        postprocess: ({ content }) => (0, utilities_1.trimNewLines)(content).replace(/\|/g, "\\|").replace(/(?:\r?\n)+/g, " ").trim()
       })
     };
     exports.tableRowTranslatorConfig = {
