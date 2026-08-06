@@ -3,6 +3,7 @@ import { after, before, test } from "node:test";
 import { createServer } from "node:http";
 import {
     WebFetchError,
+    decodeBody,
     htmlToMarkdown,
     parseHttpUrl,
     webFetch,
@@ -139,6 +140,49 @@ test("handles quoted angle brackets and escapes every table-cell pipe", () => {
     );
     assert.match(markdown, /^safe/);
     assert.match(markdown, /a\\\\b\\\|c\\\|d/);
+});
+
+test("uses Readability for article pages and removes surrounding navigation", () => {
+    const paragraph =
+        "This detailed article explains a focused topic, provides supporting context, " +
+        "and contains enough substantive prose for reliable reader-mode extraction. ";
+    const html =
+        "<!doctype html><html><head><title>Focused Article</title></head><body>" +
+        "<nav>Navigation noise that should be removed</nav>" +
+        `<article><h1>Focused Article</h1><p>${paragraph.repeat(8)}</p>` +
+        `<p>${paragraph.repeat(8)}</p></article>` +
+        "<footer>Footer noise that should be removed</footer></body></html>";
+
+    const markdown = htmlToMarkdown(html);
+    assert.match(markdown, /^# Focused Article/);
+    assert.match(markdown, /substantive prose/);
+    assert.doesNotMatch(markdown, /Navigation noise|Footer noise/);
+});
+
+test("decodes BOM, HTTP charset, and HTML metadata encodings", () => {
+    const utf8Text = new TextEncoder().encode("中文");
+    const utf8Bom = new Uint8Array(utf8Text.length + 3);
+    utf8Bom.set([0xef, 0xbb, 0xbf]);
+    utf8Bom.set(utf8Text, 3);
+    assert.equal(
+        decodeBody(utf8Bom, "text/plain; charset=windows-1252"),
+        "中文",
+    );
+
+    assert.equal(
+        decodeBody(
+            Uint8Array.from([0xd6, 0xd0, 0xce, 0xc4]),
+            "text/plain; charset=gbk",
+        ),
+        "中文",
+    );
+
+    const html = '<meta charset="windows-1252"><p>caf\xe9</p>';
+    const htmlBytes = Uint8Array.from(html, (character) => character.charCodeAt(0));
+    assert.equal(
+        decodeBody(htmlBytes, "text/html; charset=unsupported"),
+        '<meta charset="windows-1252"><p>café</p>',
+    );
 });
 
 test("matches normal and raw request headers", async () => {

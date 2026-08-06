@@ -29,8 +29,11 @@ Behavior is based on black-box tests against Copilot CLI 1.0.78-2:
 - Follows redirects and reports both the final and original URLs.
 - Matches the built-in `Contents of ...` prefixes, raw-content notices,
   pagination notes, exhausted-content marker, and HTTP status errors.
-- Passes Markdown through, converts HTML with `node-html-markdown`, and leaves
-  JSON, text, XML, and other response bodies unchanged.
+- Passes Markdown through, simplifies article-like HTML with Mozilla
+  Readability, falls back to full-document `node-html-markdown` conversion, and
+  leaves JSON, text, XML, and other response bodies unchanged.
+- Decodes response bytes using BOM, HTTP `charset`, HTML `<meta charset>`, or
+  XML encoding declarations before falling back to UTF-8.
 - Limits a request to 30 seconds, 5 MiB, and 10 redirects.
 
 The private built-in handler, telemetry, permission UI, and HTML converter are

@@ -14,8 +14,12 @@ assert.equal(
 const source = await readFile("extension.mjs", "utf8");
 const externalImports = [
     ...source.matchAll(
-        /(?:from\s+|import\s*)["']([^"'./][^"']*)["']/g,
+        /^\s*import\s+(?:[^"'`;\r\n]*?\s+from\s+)?["']([^"']+)["'];?\s*$/gm,
     ),
+    ...source.matchAll(
+        /^\s*export\s+(?:\*|\{[^}\r\n]*\})\s+from\s+["']([^"']+)["'];?\s*$/gm,
+    ),
+    ...source.matchAll(/\bimport\s*\(\s*["']([^"']+)["']\s*\)/g),
 ].map((match) => match[1]);
 
 assert.deepEqual(
