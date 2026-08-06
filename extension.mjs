@@ -6662,7 +6662,7 @@ ${indent.repeat(indentationLevel)}`).replace(/(\S+?)[^\S\r\n]+$/gm, "$1  ")
         childTranslators: visitor.instance.tableCellTranslators,
         prefix: " ",
         postfix: " |",
-        postprocess: ({ content }) => (0, utilities_1.trimNewLines)(content).replace(/\|/g, "\\|").replace(/(?:\r?\n)+/g, " ").trim()
+        postprocess: ({ content }) => (0, utilities_1.trimNewLines)(content).split("|").join("\\|").replace(/(?:\r?\n)+/g, " ").trim()
       })
     };
     exports.tableRowTranslatorConfig = {

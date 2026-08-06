@@ -10,7 +10,7 @@ const patches = [
     {
         path: "node_modules/node-html-markdown/dist/config.js",
         before: String.raw`.replace('|', '\\|')`,
-        after: String.raw`.replace(/\|/g, '\\|')`,
+        after: String.raw`.split('|').join('\\|')`,
     },
 ];
 

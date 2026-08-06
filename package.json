@@ -1,6 +1,6 @@
 {
   "name": "copilot-proxy-web-fetch",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "private": true,
   "description": "A GitHub Copilot web_fetch override without target-address filtering",
   "license": "MIT",

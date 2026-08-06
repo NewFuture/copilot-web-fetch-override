@@ -135,10 +135,10 @@ test("adds a distinct document title and preserves relative links", () => {
 
 test("handles quoted angle brackets and escapes every table-cell pipe", () => {
     const markdown = htmlToMarkdown(
-        '<p title="1 > 0">safe</p><table><tr><th>Value</th></tr><tr><td>a|b|c</td></tr></table>',
+        '<p title="1 > 0">safe</p><table><tr><th>Value</th></tr><tr><td>a\\b|c|d</td></tr></table>',
     );
     assert.match(markdown, /^safe/);
-    assert.match(markdown, /a\\\|b\\\|c/);
+    assert.match(markdown, /a\\\\b\\\|c\\\|d/);
 });
 
 test("matches normal and raw request headers", async () => {

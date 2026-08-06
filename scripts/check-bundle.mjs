@@ -36,7 +36,7 @@ assert.equal(
     "The bundle must not retain the first-pipe-only table escaping.",
 );
 assert.equal(
-    source.includes('.replace(/\\|/g, "\\\\|")'),
+    source.includes('.split("|").join("\\\\|")'),
     true,
     "The bundle must escape every pipe in table cells.",
 );
