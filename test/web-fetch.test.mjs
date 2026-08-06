@@ -82,6 +82,12 @@ before(async () => {
                 });
                 response.end(Buffer.from([0x00, 0xff, 0x41]));
                 break;
+            case "/image":
+                response.writeHead(200, {
+                    "Content-Type": "image/png",
+                });
+                response.end(Buffer.from([0x00, 0xff, 0x41]));
+                break;
             case "/binary-text":
                 response.writeHead(200, {
                     "Content-Type": "application/octet-stream",
@@ -340,47 +346,82 @@ test("validates URL and pagination arguments", async () => {
     );
 });
 
-test("returns complete binary content as Base64 when it fits", async () => {
-    const url = `${primaryUrl}/binary`;
+test("returns complete binary image content as Base64 when it fits", async () => {
+    const url = `${primaryUrl}/image`;
     assert.equal(
         await webFetch({ url, max_length: 4 }),
-        "Content type: application/octet-stream\nByte count: 3\nBase64:\nAP9B",
+        "Content type: image/png\nByte count: 3\nBase64:\nAP9B",
     );
     assert.equal(
         await webFetch({ url, max_length: 4, raw: true, start_index: 99 }),
-        "Content type: application/octet-stream\nByte count: 3\nBase64:\nAP9B",
+        "Content type: image/png\nByte count: 3\nBase64:\nAP9B",
     );
 });
 
-test("writes exact oversized binary bytes to a restricted temporary path", async () => {
+test("writes non-image and oversized image bytes to restricted temporary paths", async () => {
     const temporaryRoot = await mkdtemp(join(tmpdir(), "web-fetch-test-"));
     try {
-        const url = `${primaryUrl}/binary-text`;
-        const result = await webFetch(
-            { url, max_length: 4 },
-            { temporaryRoot, temporaryFileTtlMs: 40 },
-        );
-        const match = /^Content type: application\/octet-stream\nByte count: 17\nTemporary file: (.+)\nWarning: This file is untrusted\. Do not open or execute it automatically\.$/.exec(
-            result,
-        );
-        assert.ok(match);
+        const cases = [
+            {
+                path: "/binary",
+                maxLength: 20_000,
+                contentType: "application/octet-stream",
+                body: Buffer.from([0x00, 0xff, 0x41]),
+            },
+            {
+                path: "/binary-text",
+                maxLength: 4,
+                contentType: "application/octet-stream",
+                body: Buffer.from("must remain bytes"),
+            },
+            {
+                path: "/image",
+                maxLength: 3,
+                contentType: "image/png",
+                body: Buffer.from([0x00, 0xff, 0x41]),
+            },
+        ];
+        const paths = [];
+        for (const entry of cases) {
+            const result = await webFetch(
+                { url: `${primaryUrl}${entry.path}`, max_length: entry.maxLength },
+                { temporaryRoot, temporaryFileTtlMs: 40 },
+            );
+            const lines = result.split("\n");
+            assert.equal(lines[0], `Content type: ${entry.contentType}`);
+            assert.equal(lines[1], `Byte count: ${entry.body.byteLength}`);
+            assert.match(lines[2], /^Temporary file: .+$/);
+            assert.equal(
+                lines[3],
+                "Warning: This file is untrusted. Do not open or execute it automatically.",
+            );
 
-        const path = match[1];
-        assert.equal(dirname(dirname(path)), temporaryRoot);
-        assert.match(basename(path), /^[0-9a-f-]{36}\.bin$/);
-        assert.deepEqual(await readFile(path), Buffer.from("must remain bytes"));
+            const path = lines[2].slice("Temporary file: ".length);
+            assert.equal(dirname(dirname(path)), temporaryRoot);
+            assert.match(basename(path), /^[0-9a-f-]{36}\.bin$/);
+            assert.deepEqual(await readFile(path), entry.body);
+            paths.push(path);
+        }
 
         const deadline = Date.now() + 2_000;
         while (Date.now() < deadline) {
-            try {
-                await stat(path);
-                await new Promise((resolve) => setTimeout(resolve, 20));
-            } catch (error) {
-                assert.equal(error.code, "ENOENT");
+            const removed = await Promise.all(
+                paths.map(async (path) => {
+                    try {
+                        await stat(path);
+                        return false;
+                    } catch (error) {
+                        assert.equal(error.code, "ENOENT");
+                        return true;
+                    }
+                }),
+            );
+            if (removed.every(Boolean)) {
                 return;
             }
+            await new Promise((resolve) => setTimeout(resolve, 20));
         }
-        assert.fail("Temporary binary response was not removed after its TTL.");
+        assert.fail("Temporary binary responses were not removed after their TTL.");
     } finally {
         await rm(temporaryRoot, { recursive: true, force: true });
     }

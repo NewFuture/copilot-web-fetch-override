@@ -37,12 +37,13 @@ Behavior is based on black-box tests against Copilot CLI 1.0.78-2:
 - Treats `text/*`, JSON, XML, Markdown, JavaScript, YAML, and a small allowlist
   of other textual media types as text. A missing `Content-Type` is treated as
   text only when markup or valid control-free UTF-8 can be identified.
-- Returns binary bytes as complete Base64 when that representation fits
-  `max_length`. Otherwise it writes the exact bytes to a private OS temporary
-  directory with owner-only modes where supported, then returns the path with
-  an untrusted-file warning. Temporary files are removed after one hour or when
-  the extension process exits, whichever happens first; failed timed cleanup
-  is retried while the process remains active.
+- Returns binary image bytes as complete Base64 when that representation fits
+  `max_length`. Non-image binary responses and oversized images are written
+  byte-for-byte to a private OS temporary directory with owner-only modes where
+  supported, then returned as a path with an untrusted-file warning. Temporary
+  files are removed after one hour or when the extension process exits,
+  whichever happens first; failed timed cleanup is retried while the process
+  remains active.
 - Limits a request to 30 seconds, 5 MiB, and 10 redirects.
 
 The private built-in handler, telemetry, permission UI, and HTML converter are
