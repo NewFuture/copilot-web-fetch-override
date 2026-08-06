@@ -33,20 +33,34 @@ not guaranteed to be byte-for-byte identical for every page.
 
 ## Install
 
-The committed `extension.mjs` is self-contained, so installation does not
-require Node.js or npm:
+Copilot does not currently provide a Marketplace, deep link, or native
+one-click installer for this kind of CLI extension. It discovers
+`extension.mjs` from its user extensions directory. This repository provides a
+one-command Release installer as the closest equivalent.
+
+Because the repository is private, first authenticate GitHub CLI with an
+account that has access:
 
 ```powershell
-gh repo clone NewFuture/copilot-proxy-web-fetch "$env:USERPROFILE\.copilot\extensions\proxy-web-fetch"
+gh auth login
 ```
 
-Restart Copilot or run `/clear` to reload extensions.
-
-To update:
+Install or update to the latest release:
 
 ```powershell
-git -C "$env:USERPROFILE\.copilot\extensions\proxy-web-fetch" pull --ff-only
+gh api repos/NewFuture/copilot-proxy-web-fetch/contents/install.ps1 -H "Accept: application/vnd.github.raw+json" | powershell -NoProfile -ExecutionPolicy Bypass -Command -
 ```
+
+The installer downloads the signed-in account's latest accessible GitHub
+Release, validates its expected files, and installs it to:
+
+```powershell
+$HOME\.copilot\extensions\proxy-web-fetch
+```
+
+Restart Copilot or run `/clear` to reload extensions. Re-running the command
+updates the installed bundle. The committed and released `extension.mjs` is
+self-contained, so the installed extension does not require Node.js or npm.
 
 ## Develop
 
@@ -63,6 +77,19 @@ runtime import is `@github/copilot-sdk/extension`.
 
 Source lives in `src/`, compatibility tests in `test/`, and the generated
 single-file extension at the repository root. `node_modules` is not committed.
+
+## Publish
+
+The Release workflow verifies, packages, and publishes tags whose version
+matches `package.json`:
+
+```powershell
+git tag -a v2.0.0 -m "v2.0.0"
+git push origin v2.0.0
+```
+
+Each GitHub Release contains the single-file bundle, installer, third-party
+notices, and a versioned ZIP suitable for manual extraction.
 
 ## Security
 
