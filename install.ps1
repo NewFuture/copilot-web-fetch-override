@@ -9,6 +9,7 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 $repository = "NewFuture/copilot-web-fetch-override"
 $installFiles = @(
+    "plugin.json",
     "extension.mjs",
     "README.md",
     "LICENSE",

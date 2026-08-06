@@ -10,13 +10,42 @@ $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $package = Get-Content -LiteralPath (
     Join-Path $repositoryRoot "package.json"
 ) -Raw | ConvertFrom-Json
+$plugin = Get-Content -LiteralPath (
+    Join-Path $repositoryRoot "plugin.json"
+) -Raw | ConvertFrom-Json
+$marketplace = Get-Content -LiteralPath (
+    Join-Path $repositoryRoot ".github\plugin\marketplace.json"
+) -Raw | ConvertFrom-Json
 $packageVersion = $Version.Substring(1)
 
 if ($package.version -ne $packageVersion) {
     throw "Tag $Version does not match package.json version $($package.version)."
 }
+if ($plugin.name -ne $package.name) {
+    throw "plugin.json name $($plugin.name) does not match package.json name $($package.name)."
+}
+if ($plugin.version -ne $package.version) {
+    throw "plugin.json version $($plugin.version) does not match package.json version $($package.version)."
+}
+$marketplacePlugin = @(
+    $marketplace.plugins |
+        Where-Object { $_.name -eq $plugin.name }
+)
+if ($marketplacePlugin.Count -ne 1) {
+    throw "marketplace.json must contain exactly one $($plugin.name) plugin."
+}
+if ($marketplace.metadata.version -ne $package.version) {
+    throw "marketplace.json version $($marketplace.metadata.version) does not match package.json version $($package.version)."
+}
+if ($marketplacePlugin[0].version -ne $package.version) {
+    throw "Marketplace plugin version $($marketplacePlugin[0].version) does not match package.json version $($package.version)."
+}
+if ($marketplacePlugin[0].source -ne ".") {
+    throw "Marketplace plugin source must point to the repository root."
+}
 
 $releaseFiles = @(
+    "plugin.json",
     "extension.mjs",
     "README.md",
     "LICENSE",

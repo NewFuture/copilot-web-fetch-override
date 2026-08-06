@@ -41,6 +41,7 @@ jobs:
           assets=(
             "$archive"
             "${archive}.sha256"
+            "plugin.json"
             "extension.mjs"
             "install.ps1"
             "LICENSE"

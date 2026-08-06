@@ -52,10 +52,35 @@ not guaranteed to be byte-for-byte identical for every page.
 
 ## Install
 
-Copilot does not currently provide a Marketplace, deep link, or native
-installer for this kind of CLI extension. It discovers `extension.mjs` from its
-user extensions directory. This repository provides a one-command public
-Release installer as the closest equivalent.
+### Copilot plugin
+
+Register this repository as a plugin marketplace, then install the plugin:
+
+```powershell
+copilot plugin marketplace add NewFuture/copilot-web-fetch-override
+copilot plugin install copilot-web-fetch-override@copilot-web-fetch-override
+```
+
+Or run the equivalent commands inside an interactive Copilot session:
+
+```text
+/plugin marketplace add NewFuture/copilot-web-fetch-override
+/plugin install copilot-web-fetch-override@copilot-web-fetch-override
+```
+
+Start a new Copilot session after installation. Manage the installed plugin
+with:
+
+```powershell
+copilot plugin update copilot-web-fetch-override
+copilot plugin uninstall copilot-web-fetch-override
+```
+
+### Release installer
+
+As an alternative to the plugin manager, install the extension directly into
+the user extensions directory. Do not use both installation methods at the
+same time because they would load two copies of the `web_fetch` override.
 
 Install or update to the latest release without GitHub CLI or authentication:
 
@@ -100,8 +125,9 @@ and bundled root `extension.mjs`, checks its syntax, and confirms that its
 external runtime imports are limited to the Copilot extension SDK and Node.js
 built-ins.
 
-Source lives in `src/`, compatibility tests in `test/`, and the generated
-single-file extension at the repository root. `node_modules` is not committed.
+Source lives in `src/`, compatibility tests in `test/`, the plugin manifest in
+`plugin.json`, and the generated single-file extension at the repository root.
+`node_modules` is not committed.
 
 ## Publish
 
@@ -114,8 +140,8 @@ git tag -a $version -m $version
 git push origin $version
 ```
 
-Each GitHub Release contains the bundle, installer, license, security policy,
-third-party notices, versioned ZIP, and its SHA-256 checksum.
+Each GitHub Release contains the plugin manifest, bundle, installer, license,
+security policy, third-party notices, versioned ZIP, and its SHA-256 checksum.
 
 ## License
 
