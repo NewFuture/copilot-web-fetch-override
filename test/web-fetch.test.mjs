@@ -165,6 +165,8 @@ test("uses Readability for article pages and removes surrounding navigation", ()
 });
 
 test("decodes BOM, HTTP charset, and HTML metadata encodings", () => {
+    const latin1Bytes = (value) =>
+        Uint8Array.from(value, (character) => character.charCodeAt(0));
     const utf8Text = new TextEncoder().encode("中文");
     const utf8Bom = new Uint8Array(utf8Text.length + 3);
     utf8Bom.set([0xef, 0xbb, 0xbf]);
@@ -183,10 +185,20 @@ test("decodes BOM, HTTP charset, and HTML metadata encodings", () => {
     );
 
     const html = '<meta charset="windows-1252"><p>caf\xe9</p>';
-    const htmlBytes = Uint8Array.from(html, (character) => character.charCodeAt(0));
+    const htmlBytes = latin1Bytes(html);
     assert.equal(
         decodeBody(htmlBytes, "text/html; charset=unsupported"),
         '<meta charset="windows-1252"><p>café</p>',
+    );
+
+    const untypedHtml = `<!doctype html>${html}`;
+    assert.equal(
+        decodeBody(latin1Bytes(untypedHtml), ""),
+        '<!doctype html><meta charset="windows-1252"><p>café</p>',
+    );
+    assert.equal(
+        decodeBody(htmlBytes, ""),
+        '<meta charset="windows-1252"><p>caf�</p>',
     );
 });
 

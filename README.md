@@ -78,7 +78,7 @@ not require Node.js or npm.
 
 ## Develop
 
-Building requires Node.js 20 or newer:
+Building requires Node.js 20.19 or newer:
 
 ```powershell
 npm ci

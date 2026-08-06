@@ -19345,15 +19345,18 @@ function bomEncoding(body) {
 }
 function markupEncoding(body, contentType) {
   const type = mediaType(contentType);
-  const isMarkup = type === "" || ["text/html", "application/xhtml+xml", "text/xml", "application/xml"].includes(
+  const isDeclaredMarkup = ["text/html", "application/xhtml+xml", "text/xml", "application/xml"].includes(
     type
   ) || type.endsWith("+xml");
-  if (!isMarkup) {
+  if (type !== "" && !isDeclaredMarkup) {
     return "";
   }
   let head = "";
   for (const byte of body.subarray(0, ENCODING_SNIFF_BYTES)) {
     head += String.fromCharCode(byte);
+  }
+  if (type === "" && !/^\s*(?:<!doctype\s+html|<html\b|<\?xml\b)/i.test(head)) {
+    return "";
   }
   const xmlDeclaration = /<\?xml\b[^>]*\bencoding\s*=\s*["']([^"']+)["']/i.exec(
     head
