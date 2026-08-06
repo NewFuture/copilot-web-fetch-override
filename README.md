@@ -60,7 +60,7 @@ Release installer as the closest equivalent.
 Install or update to the latest release without GitHub CLI or authentication:
 
 ```powershell
-& ([scriptblock]::Create((irm https://github.com/NewFuture/copilot-proxy-web-fetch/releases/latest/download/install.ps1)))
+& ([scriptblock]::Create((irm https://github.com/NewFuture/copilot-web-fetch-override/releases/latest/download/install.ps1)))
 ```
 
 The installer:
@@ -69,13 +69,13 @@ The installer:
 - downloads the versioned ZIP;
 - verifies the SHA-256 digest supplied by GitHub;
 - checks the required files; and
-- installs to `$HOME\.copilot\extensions\proxy-web-fetch`.
+- installs to `$HOME\.copilot\extensions\web-fetch-override`.
 
 Restart Copilot or run `/clear` to reload extensions. Re-running the command
 updates the installed bundle. To inspect the script before executing it:
 
 ```powershell
-irm https://github.com/NewFuture/copilot-proxy-web-fetch/releases/latest/download/install.ps1 -OutFile install.ps1
+irm https://github.com/NewFuture/copilot-web-fetch-override/releases/latest/download/install.ps1 -OutFile install.ps1
 Get-Content .\install.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```

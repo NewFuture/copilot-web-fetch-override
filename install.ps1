@@ -2,12 +2,12 @@
 param(
     [ValidatePattern("^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")]
     [string]$Version = "",
-    [string]$Destination = (Join-Path $HOME ".copilot\extensions\proxy-web-fetch")
+    [string]$Destination = (Join-Path $HOME ".copilot\extensions\web-fetch-override")
 )
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
-$repository = "NewFuture/copilot-proxy-web-fetch"
+$repository = "NewFuture/copilot-web-fetch-override"
 $installFiles = @(
     "extension.mjs",
     "README.md",
@@ -18,7 +18,7 @@ $installFiles = @(
 $requiredFiles = $installFiles + @("install.ps1", "VERSION")
 $headers = @{
     Accept = "application/vnd.github+json"
-    "User-Agent" = "copilot-proxy-web-fetch-installer"
+    "User-Agent" = "copilot-web-fetch-override-installer"
     "X-GitHub-Api-Version" = "2022-11-28"
 }
 
@@ -47,7 +47,7 @@ $tagName = [string]$release.tag_name
 if ($tagName -notmatch "^v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$") {
     throw "Release metadata contains an invalid tag: $tagName"
 }
-$archiveName = "copilot-proxy-web-fetch-$tagName.zip"
+$archiveName = "copilot-web-fetch-override-$tagName.zip"
 $archiveAssets = @($release.assets | Where-Object { $_.name -eq $archiveName })
 if ($archiveAssets.Count -ne 1) {
     throw "Release $tagName must contain exactly one $archiveName asset."
@@ -61,7 +61,7 @@ if ($digest -notmatch "^sha256:([0-9a-fA-F]{64})$") {
 $expectedHash = $Matches[1].ToLowerInvariant()
 
 $temporaryRoot = Join-Path ([IO.Path]::GetTempPath()) (
-    "copilot-proxy-web-fetch-" + [Guid]::NewGuid().ToString("N")
+    "copilot-web-fetch-override-" + [Guid]::NewGuid().ToString("N")
 )
 $archivePath = Join-Path $temporaryRoot $archiveName
 $extractDirectory = Join-Path $temporaryRoot "extract"
@@ -79,7 +79,7 @@ try {
     }
 
     Expand-Archive -LiteralPath $archivePath -DestinationPath $extractDirectory
-    $payloadDirectory = Join-Path $extractDirectory "proxy-web-fetch"
+    $payloadDirectory = Join-Path $extractDirectory "web-fetch-override"
 
     foreach ($file in $requiredFiles) {
         if (-not (Test-Path -LiteralPath (Join-Path $payloadDirectory $file) -PathType Leaf)) {
@@ -93,7 +93,7 @@ try {
             -Destination (Join-Path $Destination $file) -Force
     }
 
-    Write-Host "Installed proxy-web-fetch $tagName to $Destination"
+    Write-Host "Installed web-fetch-override $tagName to $Destination"
     Write-Host "Verified release SHA-256: $actualHash"
     Write-Host "Run /clear or restart Copilot to reload the extension."
 } finally {
