@@ -19,7 +19,7 @@ the built-in interface:
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `url` | string | required | Absolute HTTP or HTTPS URL |
-| `max_length` | integer | `5000` | Returned body characters, up to `20000` |
+| `max_length` | integer | `5000` | Returned text characters or inline Base64 characters, up to `20000` |
 | `start_index` | integer | `0` | Body character offset for pagination |
 | `raw` | boolean | `false` | Skip HTML-to-Markdown conversion |
 
@@ -34,6 +34,16 @@ Behavior is based on black-box tests against Copilot CLI 1.0.78-2:
   leaves JSON, text, XML, and other response bodies unchanged.
 - Decodes response bytes using BOM, HTTP `charset`, HTML `<meta charset>`, or
   XML encoding declarations before falling back to UTF-8.
+- Treats `text/*`, JSON, XML, Markdown, JavaScript, YAML, and a small allowlist
+  of other textual media types as text. A missing `Content-Type` is treated as
+  text only when markup or valid control-free UTF-8 can be identified.
+- Returns binary image bytes as complete Base64 when that representation fits
+  `max_length`. Non-image binary responses and oversized images are written
+  byte-for-byte to a private OS temporary directory with owner-only modes where
+  supported, then returned as a path with an untrusted-file warning. Temporary
+  files are removed after one hour or when the extension process exits,
+  whichever happens first; failed timed cleanup is retried while the process
+  remains active.
 - Limits a request to 30 seconds, 5 MiB, and 10 redirects.
 
 The private built-in handler, telemetry, permission UI, and HTML converter are
@@ -86,8 +96,9 @@ npm run verify
 ```
 
 `npm run verify` runs the local HTTP compatibility tests, creates the minified
-and bundled root `extension.mjs`, checks its syntax, and confirms that its only
-external runtime import is `@github/copilot-sdk/extension`.
+and bundled root `extension.mjs`, checks its syntax, and confirms that its
+external runtime imports are limited to the Copilot extension SDK and Node.js
+built-ins.
 
 Source lives in `src/`, compatibility tests in `test/`, and the generated
 single-file extension at the repository root. `node_modules` is not committed.

@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import { basename, dirname, join } from "node:path";
 import {
     WebFetchError,
     decodeBody,
     htmlToMarkdown,
     parseHttpUrl,
+    textualResponse,
     webFetch,
 } from "../src/web-fetch.mjs";
 import {
@@ -77,6 +81,28 @@ before(async () => {
                     "Content-Type": "application/octet-stream",
                 });
                 response.end(Buffer.from([0x00, 0xff, 0x41]));
+                break;
+            case "/image":
+                response.writeHead(200, {
+                    "Content-Type": "image/png",
+                });
+                response.end(Buffer.from([0x00, 0xff, 0x41]));
+                break;
+            case "/binary-text":
+                response.writeHead(200, {
+                    "Content-Type": "application/octet-stream",
+                });
+                response.end("must remain bytes");
+                break;
+            case "/missing-content-type-html":
+                response.removeHeader("Content-Type");
+                response.end("<!doctype html><html><body><h1>Detected</h1></body></html>");
+                break;
+            case "/xml":
+                response.writeHead(200, {
+                    "Content-Type": "application/problem+xml",
+                });
+                response.end("<?xml version=\"1.0\"?><problem>details</problem>");
                 break;
             case "/inspect":
                 response.writeHead(200, { "Content-Type": "text/plain" });
@@ -202,6 +228,18 @@ test("decodes BOM, HTTP charset, and HTML metadata encodings", () => {
     );
 });
 
+test("classifies textual media types conservatively", () => {
+    const text = new TextEncoder().encode("plain text");
+    assert.equal(textualResponse("text/csv", text), true);
+    assert.equal(textualResponse("application/problem+json", text), true);
+    assert.equal(textualResponse("application/problem+xml", text), true);
+    assert.equal(textualResponse("image/svg+xml", text), true);
+    assert.equal(textualResponse("application/pdf", text), false);
+    assert.equal(textualResponse("application/octet-stream", text), false);
+    assert.equal(textualResponse("", text), true);
+    assert.equal(textualResponse("", Uint8Array.from([0x00, 0xff, 0x41])), false);
+});
+
 test("matches normal and raw request headers", async () => {
     const normal = await webFetch({ url: `${primaryUrl}/inspect` });
     assert.match(normal, /accept=text\/markdown, text\/html, \*\/\*/);
@@ -231,6 +269,21 @@ test("preserves JSON and reports its content type", async () => {
         await webFetch({ url }),
         "Content type application/json; charset=utf-8 cannot be simplified to markdown. Here is the raw content:\n" +
             `Contents of ${url}:\n{"ok":true}\n`,
+    );
+});
+
+test("preserves XML and missing-content-type HTML handling", async () => {
+    const xmlUrl = `${primaryUrl}/xml`;
+    assert.equal(
+        await webFetch({ url: xmlUrl }),
+        "Content type application/problem+xml cannot be simplified to markdown. Here is the raw content:\n" +
+            `Contents of ${xmlUrl}:\n<?xml version="1.0"?><problem>details</problem>`,
+    );
+
+    const htmlUrl = `${primaryUrl}/missing-content-type-html`;
+    assert.equal(
+        await webFetch({ url: htmlUrl }),
+        `Contents of ${htmlUrl}:\n# Detected`,
     );
 });
 
@@ -293,14 +346,85 @@ test("validates URL and pagination arguments", async () => {
     );
 });
 
-test("returns unsupported binary content as decoded raw text", async () => {
-    const url = `${primaryUrl}/binary`;
-    const result = await webFetch({ url });
-    assert.match(
-        result,
-        /^Content type application\/octet-stream cannot be simplified to markdown\./,
+test("returns complete binary image content as Base64 when it fits", async () => {
+    const url = `${primaryUrl}/image`;
+    assert.equal(
+        await webFetch({ url, max_length: 4 }),
+        "Content type: image/png\nByte count: 3\nBase64:\nAP9B",
     );
-    assert.match(result, /\u0000\uFFFDA$/);
+    assert.equal(
+        await webFetch({ url, max_length: 4, raw: true, start_index: 99 }),
+        "Content type: image/png\nByte count: 3\nBase64:\nAP9B",
+    );
+});
+
+test("writes non-image and oversized image bytes to restricted temporary paths", async () => {
+    const temporaryRoot = await mkdtemp(join(tmpdir(), "web-fetch-test-"));
+    try {
+        const cases = [
+            {
+                path: "/binary",
+                maxLength: 20_000,
+                contentType: "application/octet-stream",
+                body: Buffer.from([0x00, 0xff, 0x41]),
+            },
+            {
+                path: "/binary-text",
+                maxLength: 4,
+                contentType: "application/octet-stream",
+                body: Buffer.from("must remain bytes"),
+            },
+            {
+                path: "/image",
+                maxLength: 3,
+                contentType: "image/png",
+                body: Buffer.from([0x00, 0xff, 0x41]),
+            },
+        ];
+        const paths = [];
+        for (const entry of cases) {
+            const result = await webFetch(
+                { url: `${primaryUrl}${entry.path}`, max_length: entry.maxLength },
+                { temporaryRoot, temporaryFileTtlMs: 40 },
+            );
+            const lines = result.split("\n");
+            assert.equal(lines[0], `Content type: ${entry.contentType}`);
+            assert.equal(lines[1], `Byte count: ${entry.body.byteLength}`);
+            assert.match(lines[2], /^Temporary file: .+$/);
+            assert.equal(
+                lines[3],
+                "Warning: This file is untrusted. Do not open or execute it automatically.",
+            );
+
+            const path = lines[2].slice("Temporary file: ".length);
+            assert.equal(dirname(dirname(path)), temporaryRoot);
+            assert.match(basename(path), /^[0-9a-f-]{36}\.bin$/);
+            assert.deepEqual(await readFile(path), entry.body);
+            paths.push(path);
+        }
+
+        const deadline = Date.now() + 2_000;
+        while (Date.now() < deadline) {
+            const removed = await Promise.all(
+                paths.map(async (path) => {
+                    try {
+                        await stat(path);
+                        return false;
+                    } catch (error) {
+                        assert.equal(error.code, "ENOENT");
+                        return true;
+                    }
+                }),
+            );
+            if (removed.every(Boolean)) {
+                return;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+        assert.fail("Temporary binary responses were not removed after their TTL.");
+    } finally {
+        await rm(temporaryRoot, { recursive: true, force: true });
+    }
 });
 
 test("enforces configurable response, redirect, and timeout limits", async () => {

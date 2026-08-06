@@ -1,4 +1,9 @@
 import { Readability } from "@mozilla/readability";
+import { randomUUID } from "node:crypto";
+import { rmSync } from "node:fs";
+import { chmod, mkdtemp, open, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { DOMParser } from "linkedom/worker";
 import { NodeHtmlMarkdown } from "node-html-markdown";
 
@@ -21,6 +26,10 @@ const markdownConverter = new NodeHtmlMarkdown();
 const READABILITY_MAX_ELEMENTS = 100_000;
 const READABILITY_MIN_TEXT_LENGTH = 500;
 const ENCODING_SNIFF_BYTES = 2_048;
+const BINARY_TEMP_TTL_MS = 60 * 60 * 1_000;
+const BINARY_TEMP_CLEANUP_RETRY_MS = 60_000;
+const temporaryDirectories = new Set();
+let exitCleanupRegistered = false;
 
 function integerArgument(value, fallback, minimum, maximum, name) {
     if (value === undefined) {
@@ -376,6 +385,55 @@ function mediaType(contentType) {
     return contentType.split(";", 1)[0].trim().toLowerCase();
 }
 
+function missingTypeLooksTextual(body) {
+    if (body.length === 0 || bomEncoding(body)) {
+        return true;
+    }
+
+    let head = "";
+    for (const byte of body.subarray(0, ENCODING_SNIFF_BYTES)) {
+        head += String.fromCharCode(byte);
+    }
+    if (/^\s*(?:<!doctype\s+html|<html\b|<\?xml\b)/i.test(head)) {
+        return true;
+    }
+
+    try {
+        const text = new TextDecoder("utf-8", { fatal: true }).decode(body);
+        return !/[\u0000-\u0008\u000b\u000e-\u001f\u007f]/.test(text);
+    } catch {
+        return false;
+    }
+}
+
+export function textualResponse(contentType, body) {
+    const type = mediaType(contentType);
+    if (type === "") {
+        return missingTypeLooksTextual(body);
+    }
+    if (type.startsWith("text/")) {
+        return true;
+    }
+    return [
+        "application/ecmascript",
+        "application/javascript",
+        "application/json",
+        "application/markdown",
+        "application/sql",
+        "application/x-httpd-php",
+        "application/x-javascript",
+        "application/x-ndjson",
+        "application/x-sh",
+        "application/x-www-form-urlencoded",
+        "application/xml",
+        "application/yaml",
+    ].includes(type) ||
+        type.endsWith("+json") ||
+        type.endsWith("+markdown") ||
+        type.endsWith("+xml") ||
+        type.endsWith("+yaml");
+}
+
 function markdownContentType(contentType) {
     const type = mediaType(contentType);
     return [
@@ -426,7 +484,99 @@ function contentsHeader(result) {
     return `Contents of ${result.originalDisplayUrl}:`;
 }
 
-export function formatResult(result, raw, startIndex, maxLength) {
+function cleanupTemporaryDirectory(directory) {
+    void rm(directory, { recursive: true, force: true })
+        .then(() => temporaryDirectories.delete(directory))
+        .catch((error) => {
+            console.warn(
+                `Failed to remove temporary web_fetch directory ${directory}; retrying:`,
+                error,
+            );
+            const retryTimer = setTimeout(
+                () => cleanupTemporaryDirectory(directory),
+                BINARY_TEMP_CLEANUP_RETRY_MS,
+            );
+            retryTimer.unref();
+        });
+}
+
+function registerExitCleanup() {
+    if (exitCleanupRegistered) {
+        return;
+    }
+    exitCleanupRegistered = true;
+    process.once("exit", () => {
+        for (const directory of temporaryDirectories) {
+            try {
+                rmSync(directory, { recursive: true, force: true });
+            } catch (error) {
+                console.warn(
+                    `Failed to remove temporary web_fetch directory ${directory}:`,
+                    error,
+                );
+            }
+        }
+    });
+}
+
+async function writeTemporaryBinary(body, options) {
+    const temporaryRoot = options.temporaryRoot ?? tmpdir();
+    const temporaryFileTtlMs =
+        options.temporaryFileTtlMs ?? BINARY_TEMP_TTL_MS;
+    const directory = await mkdtemp(join(temporaryRoot, "copilot-web-fetch-"));
+    const path = join(directory, `${randomUUID()}.bin`);
+
+    try {
+        if (process.platform !== "win32") {
+            await chmod(directory, 0o700);
+        }
+        const handle = await open(path, "wx", 0o600);
+        try {
+            await handle.writeFile(body);
+        } finally {
+            await handle.close();
+        }
+    } catch (error) {
+        await rm(directory, { recursive: true, force: true });
+        throw new WebFetchError(
+            `Error: Failed to save binary response: ${errorDetail(error)}`,
+        );
+    }
+
+    temporaryDirectories.add(directory);
+    registerExitCleanup();
+    const timer = setTimeout(
+        () => cleanupTemporaryDirectory(directory),
+        temporaryFileTtlMs,
+    );
+    timer.unref();
+    return path;
+}
+
+async function formatBinaryResult(result, maxLength, options) {
+    const type = mediaType(result.contentType) || "application/octet-stream";
+    const byteCount = result.body.byteLength;
+    const base64Length = 4 * Math.ceil(byteCount / 3);
+    if (type.startsWith("image/") && base64Length <= maxLength) {
+        const base64 = Buffer.from(result.body).toString("base64");
+        return `Content type: ${type}\nByte count: ${byteCount}\nBase64:\n${base64}`;
+    }
+
+    const path = await writeTemporaryBinary(result.body, options);
+    return `Content type: ${type}\nByte count: ${byteCount}\nTemporary file: ${path}\nWarning: This file is untrusted. Do not open or execute it automatically.`;
+}
+
+export async function formatResult(
+    result,
+    raw,
+    startIndex,
+    maxLength,
+    options = {},
+) {
+    if (!textualResponse(result.contentType, result.body)) {
+        return formatBinaryResult(result, maxLength, options);
+    }
+
     const text = decodeBody(result.body, result.contentType);
     const simplified = simplifyContent(text, result.contentType, raw);
     const page = paginate(simplified.content, startIndex, maxLength);
@@ -460,5 +610,5 @@ export async function webFetch(args, requestOptions = {}) {
     );
     const raw = booleanArgument(args.raw, false, "raw");
     const result = await requestUrl(initial, raw, requestOptions);
-    return formatResult(result, raw, startIndex, maxLength);
+    return formatResult(result, raw, startIndex, maxLength, requestOptions);
 }
