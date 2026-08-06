@@ -26,6 +26,13 @@ extension only when unrestricted model-initiated HTTP access is acceptable.
 Use host firewall, proxy, and network egress controls when access must be
 limited.
 
+Binary responses that do not fit inline are written without parsing to a
+generated file in an OS temporary directory, using owner-only directory and
+file modes where the platform supports them. The returned path is untrusted
+content: callers must not open or execute it automatically. These files are
+removed after one hour or when the extension process exits, whichever happens
+first; failed timed cleanup is retried while the process remains active.
+
 Unexpected code execution, installer integrity bypass, credential disclosure
 outside this documented model, or behavior that escapes the declared HTTP(S)
 scope should be reported privately.

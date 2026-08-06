@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import { basename, dirname, join } from "node:path";
 import {
     WebFetchError,
     decodeBody,
     htmlToMarkdown,
     parseHttpUrl,
+    textualResponse,
     webFetch,
 } from "../src/web-fetch.mjs";
 import {
@@ -77,6 +81,22 @@ before(async () => {
                     "Content-Type": "application/octet-stream",
                 });
                 response.end(Buffer.from([0x00, 0xff, 0x41]));
+                break;
+            case "/binary-text":
+                response.writeHead(200, {
+                    "Content-Type": "application/octet-stream",
+                });
+                response.end("must remain bytes");
+                break;
+            case "/missing-content-type-html":
+                response.removeHeader("Content-Type");
+                response.end("<!doctype html><html><body><h1>Detected</h1></body></html>");
+                break;
+            case "/xml":
+                response.writeHead(200, {
+                    "Content-Type": "application/problem+xml",
+                });
+                response.end("<?xml version=\"1.0\"?><problem>details</problem>");
                 break;
             case "/inspect":
                 response.writeHead(200, { "Content-Type": "text/plain" });
@@ -202,6 +222,18 @@ test("decodes BOM, HTTP charset, and HTML metadata encodings", () => {
     );
 });
 
+test("classifies textual media types conservatively", () => {
+    const text = new TextEncoder().encode("plain text");
+    assert.equal(textualResponse("text/csv", text), true);
+    assert.equal(textualResponse("application/problem+json", text), true);
+    assert.equal(textualResponse("application/problem+xml", text), true);
+    assert.equal(textualResponse("image/svg+xml", text), true);
+    assert.equal(textualResponse("application/pdf", text), false);
+    assert.equal(textualResponse("application/octet-stream", text), false);
+    assert.equal(textualResponse("", text), true);
+    assert.equal(textualResponse("", Uint8Array.from([0x00, 0xff, 0x41])), false);
+});
+
 test("matches normal and raw request headers", async () => {
     const normal = await webFetch({ url: `${primaryUrl}/inspect` });
     assert.match(normal, /accept=text\/markdown, text\/html, \*\/\*/);
@@ -231,6 +263,21 @@ test("preserves JSON and reports its content type", async () => {
         await webFetch({ url }),
         "Content type application/json; charset=utf-8 cannot be simplified to markdown. Here is the raw content:\n" +
             `Contents of ${url}:\n{"ok":true}\n`,
+    );
+});
+
+test("preserves XML and missing-content-type HTML handling", async () => {
+    const xmlUrl = `${primaryUrl}/xml`;
+    assert.equal(
+        await webFetch({ url: xmlUrl }),
+        "Content type application/problem+xml cannot be simplified to markdown. Here is the raw content:\n" +
+            `Contents of ${xmlUrl}:\n<?xml version="1.0"?><problem>details</problem>`,
+    );
+
+    const htmlUrl = `${primaryUrl}/missing-content-type-html`;
+    assert.equal(
+        await webFetch({ url: htmlUrl }),
+        `Contents of ${htmlUrl}:\n# Detected`,
     );
 });
 
@@ -293,14 +340,50 @@ test("validates URL and pagination arguments", async () => {
     );
 });
 
-test("returns unsupported binary content as decoded raw text", async () => {
+test("returns complete binary content as Base64 when it fits", async () => {
     const url = `${primaryUrl}/binary`;
-    const result = await webFetch({ url });
-    assert.match(
-        result,
-        /^Content type application\/octet-stream cannot be simplified to markdown\./,
+    assert.equal(
+        await webFetch({ url, max_length: 4 }),
+        "Content type: application/octet-stream\nByte count: 3\nBase64:\nAP9B",
     );
-    assert.match(result, /\u0000\uFFFDA$/);
+    assert.equal(
+        await webFetch({ url, max_length: 4, raw: true, start_index: 99 }),
+        "Content type: application/octet-stream\nByte count: 3\nBase64:\nAP9B",
+    );
+});
+
+test("writes exact oversized binary bytes to a restricted temporary path", async () => {
+    const temporaryRoot = await mkdtemp(join(tmpdir(), "web-fetch-test-"));
+    try {
+        const url = `${primaryUrl}/binary-text`;
+        const result = await webFetch(
+            { url, max_length: 4 },
+            { temporaryRoot, temporaryFileTtlMs: 40 },
+        );
+        const match = /^Content type: application\/octet-stream\nByte count: 17\nTemporary file: (.+)\nWarning: This file is untrusted\. Do not open or execute it automatically\.$/.exec(
+            result,
+        );
+        assert.ok(match);
+
+        const path = match[1];
+        assert.equal(dirname(dirname(path)), temporaryRoot);
+        assert.match(basename(path), /^[0-9a-f-]{36}\.bin$/);
+        assert.deepEqual(await readFile(path), Buffer.from("must remain bytes"));
+
+        const deadline = Date.now() + 2_000;
+        while (Date.now() < deadline) {
+            try {
+                await stat(path);
+                await new Promise((resolve) => setTimeout(resolve, 20));
+            } catch (error) {
+                assert.equal(error.code, "ENOENT");
+                return;
+            }
+        }
+        assert.fail("Temporary binary response was not removed after its TTL.");
+    } finally {
+        await rm(temporaryRoot, { recursive: true, force: true });
+    }
 });
 
 test("enforces configurable response, redirect, and timeout limits", async () => {

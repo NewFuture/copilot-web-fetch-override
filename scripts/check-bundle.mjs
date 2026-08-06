@@ -27,9 +27,16 @@ const externalImports = Object.values(importAnalysis.metafile.outputs).flatMap(
 );
 
 assert.deepEqual(
-    [...new Set(externalImports)],
-    ["@github/copilot-sdk/extension"],
-    "The bundle must only import the Copilot extension SDK at runtime.",
+    [...new Set(externalImports)].sort(),
+    [
+        "@github/copilot-sdk/extension",
+        "node:crypto",
+        "node:fs",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+    ],
+    "The bundle must only import the Copilot extension SDK and required Node.js built-ins at runtime.",
 );
 assert.match(source, /overridesBuiltInTool:\s*(?:true|!0)/);
 assert.match(source, /name:\s*"web_fetch"/);
@@ -59,4 +66,6 @@ assert.equal(
     "The bundle must reject executable link schemes before Markdown conversion.",
 );
 
-console.log("Bundle is self-contained except for the Copilot extension SDK.");
+console.log(
+    "Bundle is self-contained except for the Copilot extension SDK and Node.js built-ins.",
+);
