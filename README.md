@@ -48,7 +48,7 @@ gh auth login
 Install or update to the latest release:
 
 ```powershell
-gh api repos/NewFuture/copilot-proxy-web-fetch/contents/install.ps1 -H "Accept: application/vnd.github.raw+json" | powershell -NoProfile -ExecutionPolicy Bypass -Command -
+& ([scriptblock]::Create((gh api repos/NewFuture/copilot-proxy-web-fetch/contents/install.ps1 -H "Accept: application/vnd.github.raw+json" | Out-String)))
 ```
 
 The installer downloads the signed-in account's latest accessible GitHub
@@ -84,8 +84,9 @@ The Release workflow verifies, packages, and publishes tags whose version
 matches `package.json`:
 
 ```powershell
-git tag -a v2.0.0 -m "v2.0.0"
-git push origin v2.0.0
+$version = "v" + (Get-Content package.json -Raw | ConvertFrom-Json).version
+git tag -a $version -m $version
+git push origin $version
 ```
 
 Each GitHub Release contains the single-file bundle, installer, third-party
