@@ -10,13 +10,22 @@ $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $package = Get-Content -LiteralPath (
     Join-Path $repositoryRoot "package.json"
 ) -Raw | ConvertFrom-Json
+$plugin = Get-Content -LiteralPath (
+    Join-Path $repositoryRoot "plugin.json"
+) -Raw | ConvertFrom-Json
 $packageVersion = $Version.Substring(1)
 
 if ($package.version -ne $packageVersion) {
     throw "Tag $Version does not match package.json version $($package.version)."
 }
-
+if ($plugin.name -ne $package.name) {
+    throw "plugin.json name $($plugin.name) does not match package.json name $($package.name)."
+}
+if ($plugin.version -ne $package.version) {
+    throw "plugin.json version $($plugin.version) does not match package.json version $($package.version)."
+}
 $releaseFiles = @(
+    "plugin.json",
     "extension.mjs",
     "README.md",
     "LICENSE",
@@ -31,12 +40,12 @@ foreach ($file in $releaseFiles) {
 }
 
 $distDirectory = Join-Path $repositoryRoot "dist"
-$archivePath = Join-Path $distDirectory "copilot-proxy-web-fetch-$Version.zip"
+$archivePath = Join-Path $distDirectory "copilot-web-fetch-override-$Version.zip"
 $checksumPath = "$archivePath.sha256"
 $temporaryRoot = Join-Path ([IO.Path]::GetTempPath()) (
-    "copilot-proxy-web-fetch-package-" + [Guid]::NewGuid().ToString("N")
+    "copilot-web-fetch-override-package-" + [Guid]::NewGuid().ToString("N")
 )
-$payloadDirectory = Join-Path $temporaryRoot "proxy-web-fetch"
+$payloadDirectory = Join-Path $temporaryRoot "web-fetch-override"
 
 try {
     New-Item -ItemType Directory -Path $distDirectory -Force | Out-Null

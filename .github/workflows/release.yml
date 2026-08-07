@@ -37,10 +37,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          archive="dist/copilot-proxy-web-fetch-${GITHUB_REF_NAME}.zip"
+          archive="dist/copilot-web-fetch-override-${GITHUB_REF_NAME}.zip"
           assets=(
             "$archive"
             "${archive}.sha256"
+            "plugin.json"
             "extension.mjs"
             "install.ps1"
             "LICENSE"
